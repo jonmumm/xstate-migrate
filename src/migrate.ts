@@ -1,17 +1,6 @@
 import { Operation, applyPatch, compare } from 'fast-json-patch';
-import { AnyMachineSnapshot, AnyStateMachine, createActor } from 'xstate';
-
-export interface XStateMigrate {
-  generateMigrations: (
-    machine: AnyStateMachine,
-    persistedSnapshot: AnyMachineSnapshot,
-  ) => Operation[];
-
-  applyMigrations: (
-    persistedSnapshot: AnyMachineSnapshot,
-    migrations: Operation[],
-  ) => AnyMachineSnapshot;
-}
+import { AnyStateMachine, createActor } from 'xstate';
+import { XStateMigrate } from './types';
 
 const getValidStates = (machine: AnyStateMachine): Set<string> => {
   if (
@@ -25,8 +14,6 @@ const getValidStates = (machine: AnyStateMachine): Set<string> => {
     throw new Error('Unable to find idMap on machine');
   }
 };
-
-const dotPathToSlashPath = (path: string): string => path.replace(/\./g, '/');
 
 export const xstateMigrate: XStateMigrate = {
   generateMigrations: (machine, persistedSnapshot) => {
