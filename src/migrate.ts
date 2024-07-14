@@ -38,24 +38,30 @@ export const xstateMigrate: XStateMigrate = {
 
     let valueOperations: Operation[] = [];
 
-    const handleStateValue = (stateValue: any, path: string) => {
+    const getInitialStateValue = (initialState: any, path: string[]): any => {
+      if (path.length === 0) return initialState;
+      return getInitialStateValue(initialState[path[0]], path.slice(1));
+    };
+
+    const handleStateValue = (stateValue: any, path: string, initialPath: string[] = []) => {
       console.debug(`Handling state value at path: ${path}`, stateValue);
       if (typeof stateValue === 'object' && stateValue !== null) {
         Object.keys(stateValue).forEach((key) => {
           const newPath = `${path}/${key}`;
+          const newInitialPath = [...initialPath, key];
           if (
             typeof stateValue[key] === 'string' &&
             !validStates.has(`${machine.id}${newPath}/${stateValue[key]}`)
           ) {
             console.debug(`Invalid substate found: ${stateValue[key]} in ${newPath}`);
-            const initialStateValue = initialSnap.value[key] || initialSnap.value;
+            const initialStateValue = getInitialStateValue(initialSnap.value, newInitialPath);
             valueOperations.push({
               op: 'replace',
               path: `/value${newPath}`,
               value: initialStateValue,
             });
           } else {
-            handleStateValue(stateValue[key], newPath);
+            handleStateValue(stateValue[key], newPath, newInitialPath);
           }
         });
       } else if (typeof stateValue === 'string') {
@@ -63,7 +69,7 @@ export const xstateMigrate: XStateMigrate = {
         console.debug(`Checking state validity: ${fullPath}`);
         if (!validStates.has(fullPath)) {
           console.debug(`Invalid state found: ${fullPath}`);
-          const initialStateValue = initialSnap.value;
+          const initialStateValue = getInitialStateValue(initialSnap.value, initialPath);
           console.debug(`Initial state for replacement: ${initialStateValue}`);
           valueOperations.push({
             op: 'replace',

@@ -260,12 +260,12 @@ describe('XState Migration', () => {
         },
       },
     });
-  
+
     const actor = createActor(parallelMachineV1).start();
     actor.send({ type: 'ACTIVATE_FOO' });
     actor.send({ type: 'ACTIVATE_BAR' });
     const persistedSnapshot = actor.getSnapshot();
-  
+
     const parallelMachineV2 = createMachine({
       id: 'parallel',
       type: 'parallel',
@@ -287,16 +287,83 @@ describe('XState Migration', () => {
         },
       },
     });
-  
+
     const migrations = xstateMigrate.generateMigrations(parallelMachineV2, persistedSnapshot);
-  
+
     expect(migrations).not.toContainEqual({
       op: 'replace',
       path: '/value/foo',
       value: 'inactive',
     });
-  
+
     expect(migrations).toEqual([]);
   });
 
+  test('should handle complex nested state changes', () => {
+    const nestedMachineV1 = createMachine({
+      id: 'nestedComplex',
+      initial: 'parent',
+      context: { data: '' },
+      states: {
+        parent: {
+          initial: 'child1',
+          states: {
+            child1: {
+              initial: 'subChild1',
+              states: {
+                subChild1: {
+                  on: { NEXT: 'subChild2' },
+                },
+                subChild2: {},
+              },
+            },
+            child2: {},
+          },
+        },
+      },
+    });
+
+    const actor = createActor(nestedMachineV1).start();
+    actor.send({ type: 'NEXT' });
+    const persistedSnapshot = actor.getSnapshot();
+
+    const nestedMachineV2 = createMachine({
+      id: 'nestedComplex',
+      initial: 'parent',
+      context: { data: '', newData: '' },
+      states: {
+        parent: {
+          initial: 'child1',
+          states: {
+            child1: {
+              initial: 'subChild1',
+              states: {
+                subChild1: {},
+                subChild3: {},
+              },
+            },
+            child3: {},
+          },
+        },
+      },
+    });
+
+    const migrations = xstateMigrate.generateMigrations(nestedMachineV2, persistedSnapshot);
+    const migratedSnapshot = xstateMigrate.applyMigrations(persistedSnapshot, migrations);
+
+    expect(migrations).toContainEqual({
+      op: 'replace',
+      path: '/value/parent/child1',
+      value: 'subChild1',
+    });
+
+    expect(migrations).toContainEqual({
+      op: 'add',
+      path: '/context/newData',
+      value: '',
+    });
+
+    expect(migratedSnapshot.value).toEqual({ parent: { child1: 'subChild1' } });
+    expect(migratedSnapshot.context).toEqual({ data: '', newData: '' });
+  });
 });
