@@ -366,4 +366,80 @@ describe('XState Migration', () => {
     expect(migratedSnapshot.value).toEqual({ parent: { child1: 'subChild1' } });
     expect(migratedSnapshot.context).toEqual({ data: '', newData: '' });
   });
+
+  test('should handle deeply nested states', () => {
+    const machineV1 = createMachine({
+      id: 'deeplyNested',
+      initial: 'level1',
+      context: { data: '' },
+      states: {
+        level1: {
+          initial: 'level2',
+          states: {
+            level2: {
+              initial: 'level3',
+              states: {
+                level3: {
+                  initial: 'level4',
+                  states: {
+                    level4: {
+                      on: { NEXT: 'level5' },
+                    },
+                    level5: {},
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const actor = createActor(machineV1).start();
+    actor.send({ type: 'NEXT' });
+    const persistedSnapshot = actor.getSnapshot();
+
+    const machineV2 = createMachine({
+      id: 'deeplyNested',
+      initial: 'level1',
+      context: { data: '', newData: '' },
+      states: {
+        level1: {
+          initial: 'level2',
+          states: {
+            level2: {
+              initial: 'level3',
+              states: {
+                level3: {
+                  initial: 'newLevel5',
+                  states: {
+                    level4: {},
+                    newLevel5: {},
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const migrations = xstateMigrate.generateMigrations(machineV2, persistedSnapshot);
+    const migratedSnapshot = xstateMigrate.applyMigrations(persistedSnapshot, migrations);
+
+    expect(migrations).toContainEqual({
+      op: 'replace',
+      path: '/value/level1/level2/level3',
+      value: 'newLevel5',
+    });
+
+    expect(migrations).toContainEqual({
+      op: 'add',
+      path: '/context/newData',
+      value: '',
+    });
+
+    expect(migratedSnapshot.value).toEqual({ level1: { level2: { level3: 'newLevel5' } } });
+    expect(migratedSnapshot.context).toEqual({ data: '', newData: '' });
+  });
 });
