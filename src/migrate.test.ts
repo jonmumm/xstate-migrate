@@ -238,4 +238,65 @@ describe('XState Migration', () => {
       value: 'idle',
     });
   });
+
+  test('should handle migrations for parallel state machines', () => {
+    const parallelMachineV1 = createMachine({
+      id: 'parallel',
+      type: 'parallel',
+      states: {
+        foo: {
+          initial: 'inactive',
+          states: {
+            inactive: { on: { ACTIVATE_FOO: 'active' } },
+            active: {},
+          },
+        },
+        bar: {
+          initial: 'inactive',
+          states: {
+            inactive: { on: { ACTIVATE_BAR: 'active' } },
+            active: {},
+          },
+        },
+      },
+    });
+  
+    const actor = createActor(parallelMachineV1).start();
+    actor.send({ type: 'ACTIVATE_FOO' });
+    actor.send({ type: 'ACTIVATE_BAR' });
+    const persistedSnapshot = actor.getSnapshot();
+  
+    const parallelMachineV2 = createMachine({
+      id: 'parallel',
+      type: 'parallel',
+      states: {
+        foo: {
+          initial: 'inactive',
+          states: {
+            inactive: {},
+            active: {},
+            newState: {},
+          },
+        },
+        bar: {
+          initial: 'inactive',
+          states: {
+            inactive: {},
+            active: {},
+          },
+        },
+      },
+    });
+  
+    const migrations = xstateMigrate.generateMigrations(parallelMachineV2, persistedSnapshot);
+  
+    expect(migrations).not.toContainEqual({
+      op: 'replace',
+      path: '/value/foo',
+      value: 'inactive',
+    });
+  
+    expect(migrations).toEqual([]);
+  });
+
 });

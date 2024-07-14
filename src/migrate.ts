@@ -38,50 +38,43 @@ export const xstateMigrate: XStateMigrate = {
 
     let valueOperations: Operation[] = [];
 
-    const handleStateValue = (stateValue: any, path: string, machineStates: any) => {
+    const handleStateValue = (stateValue: any, path: string) => {
       console.debug(`Handling state value at path: ${path}`, stateValue);
       if (typeof stateValue === 'object' && stateValue !== null) {
         Object.keys(stateValue).forEach((key) => {
           const newPath = `${path}/${key}`;
-          const currentState = machineStates[key];
-          if (currentState) {
-            if (
-              typeof stateValue[key] === 'string' &&
-              currentState.states &&
-              !currentState.states[stateValue[key]]
-            ) {
-              console.debug(`Invalid substate found: ${stateValue[key]} in ${newPath}`);
-              valueOperations.push({
-                op: 'replace',
-                path: newPath,
-                value: currentState.initial,
-              });
-            } else {
-              handleStateValue(stateValue[key], newPath, currentState.states);
-            }
-          } else {
-            console.debug(`Invalid state found: ${newPath}`);
+          if (
+            typeof stateValue[key] === 'string' &&
+            !validStates.has(`${machine.id}${newPath}/${stateValue[key]}`)
+          ) {
+            console.debug(`Invalid substate found: ${stateValue[key]} in ${newPath}`);
+            const initialStateValue = initialSnap.value[key] || initialSnap.value;
             valueOperations.push({
-              op: 'remove',
-              path: newPath,
+              op: 'replace',
+              path: `/value${newPath}`,
+              value: initialStateValue,
             });
+          } else {
+            handleStateValue(stateValue[key], newPath);
           }
         });
       } else if (typeof stateValue === 'string') {
-        const fullPath = `${machine.id}/${stateValue}`; // Combine machine ID with state value
+        const fullPath = `${machine.id}${path}/${stateValue}`.replace(/\./g, '/');
+        console.debug(`Checking state validity: ${fullPath}`);
         if (!validStates.has(fullPath)) {
-          // Check the full path in valid states
           console.debug(`Invalid state found: ${fullPath}`);
+          const initialStateValue = initialSnap.value;
+          console.debug(`Initial state for replacement: ${initialStateValue}`);
           valueOperations.push({
             op: 'replace',
-            path,
-            value: machineStates.initial || Object.keys(machineStates)[0],
+            path: `/value${path}`,
+            value: initialStateValue,
           });
         }
       }
     };
 
-    handleStateValue(persistedSnapshot.value, '/value', machine.config.states);
+    handleStateValue(persistedSnapshot.value, '');
 
     const allOperations = [...valueOperations, ...filteredContextOperations];
     console.debug('All generated migrations:', allOperations);
