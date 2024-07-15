@@ -30,22 +30,36 @@ import { generateMigrations } from 'xstate-migrate';
 
 // Define your initial state machine
 const machineV1 = createMachine({
-  id: 'test',
-  initial: 'idle',
-  context: { count: 0 },
-  states: { idle: {}, active: {} },
+  id: 'nested',
+  initial: 'parent',
+  context: { data: '' },
+  states: {
+    parent: {
+      initial: 'child1',
+      states: {
+        child1: { on: { NEXT: 'child2' } },
+        child2: {},
+      },
+    },
+  },
 });
 
 // Create an actor and get the initial snapshot
 const actor = createActor(machineV1).start();
+actor.send({ type: 'NEXT' });
 const persistedSnapshot = actor.getSnapshot();
 
 // Define your new state machine
 const machineV2 = createMachine({
-  id: 'test',
-  initial: 'idle',
-  context: { count: 0, newProp: 'default' },
-  states: { idle: {}, active: {} },
+  id: 'nested',
+  initial: 'parent',
+  context: { data: '', newData: '' },
+  states: {
+    parent: {
+      initial: 'child1',
+      states: { child1: {}, child3: {} },
+    },
+  },
 });
 
 // Generate the migration patches
@@ -54,7 +68,8 @@ const migrations = generateMigrations(machineV2, persistedSnapshot);
 console.log(migrations);
 /*
 [
-  { op: 'add', path: '/context/newProp', value: 'default' }
+  { op: 'replace', path: '/value/parent', value: 'child1' },
+  { op: 'add', path: '/context/newData', value: '' }
 ]
 */
 ```
@@ -67,13 +82,14 @@ Use the `applyMigrations` function to apply a set of migration patches to a pers
 import { applyMigrations } from 'xstate-migrate';
 
 const persistedSnapshot = {
-  context: { count: 5 },
-  value: 'active',
+  context: { data: '' },
+  value: { parent: 'child2' },
   status: 'active',
 };
 
 const migrations = [
-  { op: 'add', path: '/context/newProp', value: 'default' },
+  { op: 'replace', path: '/value/parent', value: 'child1' },
+  { op: 'add', path: '/context/newData', value: '' },
 ];
 
 const migratedSnapshot = applyMigrations(persistedSnapshot, migrations);
@@ -81,12 +97,19 @@ const migratedSnapshot = applyMigrations(persistedSnapshot, migrations);
 console.log(migratedSnapshot);
 /*
 {
-  context: { count: 5, newProp: 'default' },
-  value: 'active',
+  context: { data: '', newData: '' },
+  value: { parent: 'child1' },
   status: 'active'
 }
 */
 ```
+
+## How Migrations Work
+
+- Migrations are generated as a list of JSON Patch operations that describe the changes needed to update a persisted snapshot to match a new state machine configuration.
+- The operations can include adding, removing, or replacing properties in the state machine's context or value.
+- The `generateMigrations` function compares the initial snapshot of the new state machine with the persisted snapshot and creates the necessary operations.
+- The `applyMigrations` function applies these operations to the persisted snapshot, updating it to reflect the new state machine configuration.
 
 ## API
 
