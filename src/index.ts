@@ -1,2 +1,2 @@
-export { xstateMigrate } from './migrate';
+export * from './migrate';
 export type { XStateMigrate } from './types';

@@ -1,18 +1,23 @@
 {
   "name": "xstate-migrate",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "A migration library for persisted XState machines",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "jest",
-    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
-    "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
+    "lint": "eslint 'src/**/*.ts'",
+    "format": "prettier --write 'src/**/*.ts'",
     "prepare": "npm run build",
     "prepublishOnly": "npm test && npm run lint"
   },
-  "keywords": ["xstate", "state machine", "migration", "typescript"],
+  "keywords": [
+    "xstate",
+    "state machine",
+    "migration",
+    "typescript"
+  ],
   "author": "jonmumm",
   "license": "MIT",
   "dependencies": {
@@ -25,10 +30,13 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",
     "prettier": "^2.8.8",
     "ts-jest": "^29.2.2",
     "typescript": "^5.5.3"
   },
-  "files": ["lib/**/*"]
+  "files": [
+    "lib/**/*"
+  ]
 }

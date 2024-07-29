@@ -30,32 +30,6 @@ describe('XState Migration', () => {
     });
   });
 
-  test('should generate migrations when properties are removed', () => {
-    const machineV1 = createMachine({
-      id: 'test',
-      initial: 'idle',
-      context: { count: 0, oldProp: 'to be removed' },
-      states: { idle: {}, active: {} },
-    });
-
-    const actor = createActor(machineV1).start();
-    const persistedSnapshot = actor.getSnapshot();
-
-    const machineV2 = createMachine({
-      id: 'test',
-      initial: 'idle',
-      context: { count: 0 },
-      states: { idle: {}, active: {} },
-    });
-
-    const migrations = xstateMigrate.generateMigrations(machineV2, persistedSnapshot);
-
-    expect(migrations).toContainEqual({
-      op: 'remove',
-      path: '/context/oldProp',
-    });
-  });
-
   test('should apply migrations to add new properties', () => {
     const persistedSnapshot: AnyMachineSnapshot = {
       context: { count: 5 },
@@ -441,5 +415,54 @@ describe('XState Migration', () => {
 
     expect(migratedSnapshot.value).toEqual({ level1: { level2: { level3: 'newLevel5' } } });
     expect(migratedSnapshot.context).toEqual({ data: '', newData: '' });
+  });
+
+  test('should not remove existing context properties when they are not in the new machine', () => {
+    // Define the initial machine with extra context properties
+    const machineV1 = createMachine({
+      id: 'test',
+      initial: 'idle',
+      context: {
+        count: 0,
+        importantData: 'Do not remove me',
+        anotherImportantProp: 42,
+      },
+      states: { idle: {}, active: {} },
+    });
+
+    // Create an actor and get its snapshot
+    const actor = createActor(machineV1).start();
+    const persistedSnapshot = actor.getSnapshot();
+
+    // Define the new machine version without mentioning the extra properties
+    const machineV2 = createMachine({
+      id: 'test',
+      initial: 'idle',
+      context: { count: 0 },
+      states: { idle: {}, active: {} },
+    });
+
+    // Generate migrations
+    const migrations = xstateMigrate.generateMigrations(machineV2, persistedSnapshot);
+
+    // Apply migrations
+    const migratedSnapshot = xstateMigrate.applyMigrations(persistedSnapshot, migrations);
+
+    // Assert that the important properties were not removed
+    expect(migratedSnapshot.context).toEqual({
+      count: 0,
+      importantData: 'Do not remove me',
+      anotherImportantProp: 42,
+    });
+
+    // Ensure no remove operations were generated for these properties
+    expect(migrations).not.toContainEqual({
+      op: 'remove',
+      path: '/context/importantData',
+    });
+    expect(migrations).not.toContainEqual({
+      op: 'remove',
+      path: '/context/anotherImportantProp',
+    });
   });
 });

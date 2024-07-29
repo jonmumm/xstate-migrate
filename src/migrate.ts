@@ -20,17 +20,16 @@ export const xstateMigrate: XStateMigrate = {
     const actor = createActor(machine).start();
     const initialSnap = actor.getSnapshot();
 
-    const contextOperations = compare(persistedSnapshot.context, initialSnap.context);
-    const filteredContextOperations = contextOperations
-      .filter((operation) => operation.op === 'add' || operation.op === 'remove')
+    // Only generate 'add' operations for new properties in the initial snapshot
+    const contextOperations = compare(persistedSnapshot.context, initialSnap.context)
+      .filter((operation) => operation.op === 'add')
       .map((operation) => ({
         ...operation,
         path: `/context${operation.path}`,
       }));
 
     const validStates = getValidStates(machine);
-
-    let valueOperations: Operation[] = [];
+    const valueOperations: Operation[] = [];
 
     const getInitialStateValue = (initialState: any, path: string[]): any => {
       if (path.length === 0) return initialState;
@@ -71,7 +70,7 @@ export const xstateMigrate: XStateMigrate = {
 
     handleStateValue(persistedSnapshot.value, '');
 
-    const allOperations = [...valueOperations, ...filteredContextOperations];
+    const allOperations = [...valueOperations, ...contextOperations];
     return allOperations;
   },
 
