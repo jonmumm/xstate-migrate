@@ -1,6 +1,6 @@
 {
   "name": "xstate-migrate",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A migration library for persisted XState machines",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -20,9 +20,11 @@
   ],
   "author": "jonmumm",
   "license": "MIT",
-  "dependencies": {
-    "fast-json-patch": "^3.1.1",
+  "peerDependencies": {
     "xstate": "^5.15.0"
+  },
+  "dependencies": {
+    "fast-json-patch": "^3.1.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
@@ -34,7 +36,8 @@
     "jest": "^29.7.0",
     "prettier": "^2.8.8",
     "ts-jest": "^29.2.2",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "xstate": "^5.15.0"
   },
   "files": [
     "lib/**/*"
