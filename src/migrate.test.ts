@@ -1,5 +1,5 @@
 import { Operation } from 'fast-json-patch';
-import { AnyMachineSnapshot, createActor, createMachine } from 'xstate';
+import { AnyMachineSnapshot, createActor, createMachine, setup } from 'xstate';
 import { xstateMigrate } from './migrate';
 
 describe('XState Migration', () => {
@@ -466,3 +466,95 @@ describe('XState Migration', () => {
     });
   });
 });
+
+describe('XState Migration with typed input and runtime dependency', () => {
+  interface RuntimeDependency {
+    getSnapshot: () => { value: number };
+  }
+
+  const setupMachine = setup({
+    types: {
+      input: {} as {
+        dependency: RuntimeDependency;
+      },
+      context: {} as {
+        snapshotValue: number;
+        otherValue: string;
+      },
+      events: {} as { type: 'UPDATE_SNAPSHOT' } | { type: 'SET_OTHER_VALUE'; value: string },
+    },
+  });
+
+  test('should migrate machine with runtime dependency in input', () => {
+    const mockDependency: RuntimeDependency = {
+      getSnapshot: () => ({ value: 42 }),
+    };
+
+    const machineV1 = setupMachine.createMachine({
+      id: 'runtimeDependencyMachine',
+      initial: 'idle',
+      context: ({ input }) => ({
+        snapshotValue: input.dependency.getSnapshot().value,
+        otherValue: 'initial',
+      }),
+      states: {
+        idle: {},
+      },
+    });
+
+    const actor = createActor(machineV1, {
+      input: {
+        dependency: mockDependency,
+      },
+    }).start();
+
+    actor.send({ type: 'SET_OTHER_VALUE', value: 'updated' });
+    const persistedSnapshot = actor.getSnapshot();
+
+    // For V2, let's add a new context property that also uses the runtime dependency
+    const setupMachineV2 = setup({
+      types: {
+        input: {} as {
+          dependency: RuntimeDependency;
+        },
+        context: {} as {
+          snapshotValue: number;
+          otherValue: string;
+          newSnapshotValue: number;
+        },
+        events: {} as { type: 'UPDATE_SNAPSHOT' } | { type: 'SET_OTHER_VALUE'; value: string },
+      },
+    });
+
+    const machineV2 = setupMachineV2.createMachine({
+      id: 'runtimeDependencyMachine',
+      initial: 'idle',
+      context: ({ input }) => ({
+        snapshotValue: input.dependency.getSnapshot().value,
+        otherValue: 'initial',
+        newSnapshotValue: input.dependency.getSnapshot().value * 2,
+      }),
+      states: {
+        idle: {},
+      },
+    });
+
+    const migrations = xstateMigrate.generateMigrations(machineV2, persistedSnapshot, {
+      dependency: mockDependency,
+    });
+    const migratedSnapshot = xstateMigrate.applyMigrations(persistedSnapshot, migrations);
+
+    expect(migrations).toContainEqual({
+      op: 'add',
+      path: '/context/newSnapshotValue',
+      value: 84, // 42 * 2
+    });
+
+    expect(migratedSnapshot.context).toEqual({
+      snapshotValue: 42,
+      otherValue: 'initial',
+      newSnapshotValue: 84,
+    });
+  });
+});
+

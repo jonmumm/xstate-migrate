@@ -1,5 +1,5 @@
 import { Operation, applyPatch, compare } from 'fast-json-patch';
-import { AnyStateMachine, createActor } from 'xstate';
+import { AnyMachineSnapshot, AnyStateMachine, InputFrom, createActor } from 'xstate';
 import { XStateMigrate } from './types';
 
 const getValidStates = (machine: AnyStateMachine): Set<string> => {
@@ -16,12 +16,21 @@ const getValidStates = (machine: AnyStateMachine): Set<string> => {
 };
 
 export const xstateMigrate: XStateMigrate = {
-  generateMigrations: (machine, persistedSnapshot) => {
-    const actor = createActor(machine).start();
-    const initialSnap = actor.getSnapshot();
+  generateMigrations: <TMachine extends AnyStateMachine>(
+    machine: TMachine,
+    persistedSnapshot: AnyMachineSnapshot,
+    input?: InputFrom<TMachine>,
+  ) => {
+    // Create a new actor with the provided input
+    const actor = createActor(machine, { input }).start();
+    const initialSnap = actor.getSnapshot() as AnyMachineSnapshot;
+
+    // Handle cases where context might be undefined
+    const persistedContext = persistedSnapshot.context || {};
+    const initialContext = initialSnap.context || {};
 
     // Only generate 'add' operations for new properties in the initial snapshot
-    const contextOperations = compare(persistedSnapshot.context, initialSnap.context)
+    const contextOperations = compare(persistedContext, initialContext)
       .filter((operation) => operation.op === 'add')
       .map((operation) => ({
         ...operation,

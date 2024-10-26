@@ -1,4 +1,3 @@
-
 # xstate-migrate
 
 `xstate-migrate` is a migration library for persisted XState machines, designed to facilitate state machine migrations when updating your XState configurations. This library generates and applies migration patches to ensure seamless transitions between different versions of your state machines.
@@ -26,50 +25,55 @@ Use the `generateMigrations` function to generate a set of migration patches bet
 
 ```typescript
 import { createMachine, createActor } from 'xstate';
-import { generateMigrations } from 'xstate-migrate';
+import { xstateMigrate } from 'xstate-migrate';
 
 // Define your initial state machine
 const machineV1 = createMachine({
-  id: 'nested',
-  initial: 'parent',
-  context: { data: '' },
+  types: {
+    input: {} as { initialData: string },
+    context: {} as { data: string },
+  },
+  id: 'example',
+  initial: 'idle',
+  context: ({ input }) => ({ data: input.initialData }),
   states: {
-    parent: {
-      initial: 'child1',
-      states: {
-        child1: { on: { NEXT: 'child2' } },
-        child2: {},
-      },
-    },
+    idle: { on: { NEXT: 'active' } },
+    active: {},
   },
 });
 
 // Create an actor and get the initial snapshot
-const actor = createActor(machineV1).start();
+const actor = createActor(machineV1, {
+  input: { initialData: 'Hello' },
+}).start();
 actor.send({ type: 'NEXT' });
 const persistedSnapshot = actor.getSnapshot();
 
 // Define your new state machine
 const machineV2 = createMachine({
-  id: 'nested',
-  initial: 'parent',
-  context: { data: '', newData: '' },
+  types: {
+    input: {} as { initialData: string },
+    context: {} as { data: string; newData: number },
+  },
+  id: 'example',
+  initial: 'idle',
+  context: ({ input }) => ({ data: input.initialData, newData: 0 }),
   states: {
-    parent: {
-      initial: 'child1',
-      states: { child1: {}, child3: {} },
-    },
+    idle: { on: { NEXT: 'active' } },
+    active: {},
+    newState: {},
   },
 });
 
 // Generate the migration patches
-const migrations = generateMigrations(machineV2, persistedSnapshot);
+const migrations = xstateMigrate.generateMigrations(machineV2, persistedSnapshot, {
+  initialData: 'Hello',
+});
 
 console.log(migrations);
 /*
 [
-  { op: 'replace', path: '/value/parent', value: 'child1' },
-  { op: 'add', path: '/context/newData', value: '' }
+  { op: 'add', path: '/context/newData', value: 0 }
 ]
 */
 ```
@@ -79,27 +83,22 @@ console.log(migrations);
 Use the `applyMigrations` function to apply a set of migration patches to a persisted snapshot.
 
 ```typescript
-import { applyMigrations } from 'xstate-migrate';
+import { xstateMigrate } from 'xstate-migrate';
 
 const persistedSnapshot = {
-  context: { data: '' },
-  value: { parent: 'child2' },
-  status: 'active',
+  context: { data: 'Hello' },
+  value: 'active',
 };
 
-const migrations = [
-  { op: 'replace', path: '/value/parent', value: 'child1' },
-  { op: 'add', path: '/context/newData', value: '' },
-];
+const migrations = [{ op: 'add', path: '/context/newData', value: 0 }];
 
-const migratedSnapshot = applyMigrations(persistedSnapshot, migrations);
+const migratedSnapshot = xstateMigrate.applyMigrations(persistedSnapshot, migrations);
 
 console.log(migratedSnapshot);
 /*
 {
-  context: { data: '', newData: '' },
-  value: { parent: 'child1' },
-  status: 'active'
+  context: { data: 'Hello', newData: 0 },
+  value: 'active'
 }
 */
 ```
@@ -109,18 +108,20 @@ console.log(migratedSnapshot);
 - Migrations are generated as a list of JSON Patch operations that describe the changes needed to update a persisted snapshot to match a new state machine configuration.
 - The operations can include adding, removing, or replacing properties in the state machine's context or value.
 - The `generateMigrations` function compares the initial snapshot of the new state machine with the persisted snapshot and creates the necessary operations.
+- Existing context values are preserved during the migration process.
 - The `applyMigrations` function applies these operations to the persisted snapshot, updating it to reflect the new state machine configuration.
 
 ## API
 
-### `generateMigrations(machine: AnyStateMachine, persistedSnapshot: any): Operation[]`
+### `xstateMigrate.generateMigrations<TMachine extends AnyStateMachine>(machine: TMachine, persistedSnapshot: AnyMachineSnapshot, input?: InputFrom<TMachine>): Operation[]`
 
 Generates a list of migration patches for updating a persisted snapshot to match the new state machine configuration.
 
 - `machine`: The new version of the state machine.
 - `persistedSnapshot`: The persisted snapshot of the previous state machine.
+- `input` (optional): The input for the new state machine, matching its input type.
 
-### `applyMigrations(persistedSnapshot: any, migrations: Operation[]): any`
+### `xstateMigrate.applyMigrations(persistedSnapshot: AnyMachineSnapshot, migrations: Operation[]): AnyMachineSnapshot`
 
 Applies a list of migration patches to a persisted snapshot.
 
@@ -129,7 +130,8 @@ Applies a list of migration patches to a persisted snapshot.
 
 ### Migration Format
 
-The migrations generated by `xstate-migrate` follow the [JSON Patch](http://jsonpatch.com) standard (RFC 6902). JSON Patch is a format for describing changes to a JSON document. It is a JSON document itself that contains an array of operations. Each operation is an object with the following properties:
+The migrations generated by `xstate-migrate` follow the [JSON Patch](http://jsonpatch.com) standard (RFC 6902). JSON Patch is a format for describing changes to a JSON document. It is a JSON document itself that contains an array of operations. Each operation is an
+object with the following properties:
 
 - `op`: The operation to perform. Can be one of `add`, `remove`, `replace`, `move`, `copy`, or `test`.
 - `path`: A JSON Pointer that indicates the location in the target document where the operation is to be performed.
@@ -138,9 +140,7 @@ The migrations generated by `xstate-migrate` follow the [JSON Patch](http://json
 Example migration:
 
 ```json
-[
-  { "op": "add", "path": "/context/newProp", "value": "default" }
-]
+[{ "op": "add", "path": "/context/newProp", "value": "default" }]
 ```
 
 ## License
